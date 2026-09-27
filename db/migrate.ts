@@ -1,6 +1,6 @@
 import postgres from "postgres";
+import { connectionString } from "./utils.js";
 
-const connectionString = "postgres://appuser:1234@localhost:5432/mydb";
 const sql = postgres(connectionString);
 
 async function run() {

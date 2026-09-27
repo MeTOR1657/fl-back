@@ -1,14 +1,13 @@
+/// <reference types="node" />
+
 import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
-import { connectionString } from "@db/utils.js";
 
 export default defineConfig({
+  schema: "./src/db/schema.ts",
+  out: "./drizzle",
   dialect: "postgresql",
-  schema: "./db/schema.ts",
-  out: "db/migration",
   dbCredentials: {
-    url: connectionString,
+    url: process.env.DATABASE_URL!,
   },
-  verbose: true,
-  strict: true,
 });

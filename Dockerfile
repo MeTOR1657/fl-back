@@ -22,10 +22,10 @@ RUN pnpm install && pnpm store prune
 RUN pnpm run build
 
 # Set environment variable NODE_ENV to 'production' for best performance and security
-ENV NODE_ENV production
+ENV NODE_ENV=production
 
 # Set environment variable PORT to 3000 (the port your app will listen on)
-ENV PORT 3000
+ENV PORT=3000
 
 # Expose port 3000 so Docker knows which port the app runs on
 EXPOSE 3000
