@@ -1,4 +1,4 @@
-name: preflight # You can also change this to another name to avoid warning with existing group.
+name: preflight
 services:
   backend:
     container_name: pf-backend
@@ -9,9 +9,20 @@ services:
     networks:
       - preflight_pf-net
     environment:
+      PORT: 3000
       DATABASE_URL: postgres://${POSTGRES_APP_USER}:${POSTGRES_APP_PASSWORD}@pf-db:${POSTGRES_PORT}/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      FRONTEND_URL: ${FRONTEND_URL}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      CMU_OAUTH_CLIENT_ID: ${CMU_OAUTH_CLIENT_ID}
+      CMU_OAUTH_CLIENT_SECRET: ${CMU_OAUTH_CLIENT_SECRET}
+      CMU_OAUTH_REDIRECT_URI: ${CMU_OAUTH_REDIRECT_URI}
+      UPLOAD_DIR: uploads
     volumes:
       - ./logs:/app/logs
 networks:
-  preflight_pf-net: # Check by using `docker network ls` command
+  preflight_pf-net:
     external: true

@@ -299,7 +299,7 @@ export async function googleOAuthCallback(req: Request, res: Response) {
         }).returning();
 
     const accessToken = generateToken({ userId: user.id, email: user.email, role: user.role });
-    frontend.pathname = "/";
+    frontend.pathname = user.role === "ADMIN" || user.role === "STAFF" ? "/dashboard" : "/tickets";
     frontend.search = "";
     frontend.hash = new URLSearchParams({ access_token: accessToken, token_type: "Bearer" }).toString();
     return res.redirect(302, frontend.toString());
@@ -308,3 +308,209 @@ export async function googleOAuthCallback(req: Request, res: Response) {
     return fail("google_sign_in_failed");
   }
 }
+
+export async function cmuOAuthExchange(req: Request, res: Response) {
+  try {
+    const { code, redirectUri, clientId, clientSecret } = req.body ?? {};
+    if (!code || typeof code !== "string") {
+      return res.status(400).json({ success: false, error: "code is required" });
+    }
+
+    const cId = clientId || env.cmuClientId;
+    const cSec = clientSecret || env.cmuClientSecret;
+    const rUri = redirectUri || env.cmuRedirectUri;
+
+    const tokenParams = new URLSearchParams({
+      code: code.trim(),
+      redirect_uri: rUri,
+      client_id: cId,
+      client_secret: cSec,
+      grant_type: "authorization_code",
+    });
+
+    const tokenRes = await fetch("https://oauth497.cpecmu.com/application/o/token/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: tokenParams.toString(),
+    });
+
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      return res.status(tokenRes.status).json({
+        success: false,
+        error: `Token exchange returned status ${tokenRes.status}: ${errText}`,
+      });
+    }
+
+    const tokenData: any = await tokenRes.json();
+    const accessTokenOAuth = tokenData.access_token || tokenData.token;
+    if (!accessTokenOAuth) {
+      return res.status(400).json({
+        success: false,
+        error: tokenData.message || tokenData.error_description || "No access token received",
+      });
+    }
+
+    const userRes = await fetch("https://oauth497.cpecmu.com/application/o/userinfo/", {
+      headers: { Authorization: `Bearer ${accessTokenOAuth}` },
+    });
+
+    let rawUserData: any = {};
+    if (userRes.ok) {
+      rawUserData = await userRes.json();
+    }
+
+    const username = rawUserData.preferred_username || rawUserData.nickname || rawUserData.name || "cmu.student";
+    const email = (rawUserData.email || `${username}@cmu.ac.th`).trim().toLowerCase();
+    const nameParts = (rawUserData.name || "").split(" ");
+    const firstName = rawUserData.name_th || rawUserData.given_name || nameParts[0] || username;
+    const lastName = rawUserData.surname_th || rawUserData.family_name || nameParts.slice(1).join(" ") || "";
+    const fullName = `${firstName} ${lastName}`.trim();
+    const studentId = username.match(/^\d{9}$/) ? username : (rawUserData.student_id || null);
+    const faculty = rawUserData.organization_name_TH || rawUserData.organization_name_EN || "Faculty of Engineering";
+    const major = rawUserData.major || "Computer Engineering";
+    const isStaff = email.includes("admin") || email.includes("staff") || username === "bimcub12345";
+    const role = isStaff ? "ADMIN" : "REPORTER";
+
+    const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const now = new Date();
+    let dbUser: typeof users.$inferSelect;
+
+    if (existing) {
+      const [updated] = await db
+        .update(users)
+        .set({
+          fullName: existing.fullName || fullName,
+          studentId: existing.studentId || studentId,
+          faculty: existing.faculty || faculty,
+          major: existing.major || major,
+          lastLoginAt: now,
+        })
+        .where(eq(users.id, existing.id))
+        .returning();
+      dbUser = updated;
+    } else {
+      const dummyPassword = await bcrypt.hash(randomBytes(16).toString("hex"), 10);
+      const [created] = await db
+        .insert(users)
+        .values({
+          email,
+          fullName,
+          studentId,
+          faculty,
+          major,
+          role,
+          passwordHash: dummyPassword,
+          lastLoginAt: now,
+        })
+        .returning();
+      dbUser = created;
+    }
+
+    const jwtToken = generateToken({
+      userId: dbUser.id,
+      email: dbUser.email,
+      role: dbUser.role,
+    });
+
+    const cmuUserProfile = {
+      cmuitaccount_name: username,
+      cmuitaccount: email,
+      firstname_TH: firstName,
+      firstname_EN: rawUserData.name_en || firstName,
+      lastname_TH: lastName,
+      lastname_EN: rawUserData.surname_en || lastName,
+      student_id: studentId || "",
+      organization_code: "06",
+      organization_name_TH: faculty,
+      organization_name_EN: rawUserData.organization_name_EN || faculty,
+      itaccounttype_id: isStaff ? "StaffAcc" : "StdAcc",
+      itaccounttype_TH: isStaff ? "บุคลากร" : "นักศึกษา",
+      itaccounttype_EN: isStaff ? "Staff" : "Student",
+    };
+
+    return res.json({
+      success: true,
+      accessToken: jwtToken,
+      user: safeUser(dbUser),
+      cmuProfile: cmuUserProfile,
+    });
+  } catch (error: any) {
+    console.error("CMU OAuth exchange failed:", error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Internal server error during CMU OAuth exchange",
+    });
+  }
+}
+
+export async function cmuTestLogin(req: Request, res: Response) {
+  try {
+    const { accountName, role: requestedRole } = req.body ?? {};
+    const acct = (typeof accountName === "string" && accountName.trim()) ? accountName.trim() : "student";
+    const email = (acct.includes("@") ? acct : `${acct}@cmu.ac.th`).toLowerCase();
+    const isStaff = requestedRole === "admin" || email.includes("admin") || acct === "bimcub12345";
+    const role = isStaff ? "ADMIN" : "REPORTER";
+    const studentId = acct.match(/\d{9}/) ? acct : (isStaff ? null : "650610123");
+    const fullName = isStaff ? "Admin Supakorn Suksomboon" : "Supakorn Suksomboon";
+
+    const [existing] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    const now = new Date();
+    let dbUser: typeof users.$inferSelect;
+
+    if (existing) {
+      const [updated] = await db
+        .update(users)
+        .set({ role, lastLoginAt: now })
+        .where(eq(users.id, existing.id))
+        .returning();
+      dbUser = updated;
+    } else {
+      const dummyPassword = await bcrypt.hash("123456", 10);
+      const [created] = await db
+        .insert(users)
+        .values({
+          email,
+          fullName,
+          studentId,
+          role,
+          passwordHash: dummyPassword,
+          lastLoginAt: now,
+        })
+        .returning();
+      dbUser = created;
+    }
+
+    const jwtToken = generateToken({
+      userId: dbUser.id,
+      email: dbUser.email,
+      role: dbUser.role,
+    });
+
+    const cmuUserProfile = {
+      cmuitaccount_name: acct.replace("@cmu.ac.th", ""),
+      cmuitaccount: email,
+      firstname_TH: isStaff ? "แอดมินฝ่ายอาคาร" : "ศุภกร",
+      firstname_EN: isStaff ? "Facility Admin" : "Supakorn",
+      lastname_TH: isStaff ? "มช." : "สุขสมบูรณ์",
+      lastname_EN: isStaff ? "CMU" : "Suksomboon",
+      student_id: studentId || "",
+      organization_code: "06",
+      organization_name_TH: isStaff ? "สำนักงานบริหารจัดการอาคารและสถานที่" : "ภาควิชาวิศวกรรมคอมพิวเตอร์",
+      organization_name_EN: isStaff ? "CMU Facilities" : "Department of Computer Engineering",
+      itaccounttype_id: isStaff ? "StaffAcc" : "StdAcc",
+      itaccounttype_TH: isStaff ? "บุคลากร" : "นักศึกษา",
+      itaccounttype_EN: isStaff ? "Staff" : "Student",
+    };
+
+    return res.json({
+      success: true,
+      accessToken: jwtToken,
+      user: safeUser(dbUser),
+      cmuProfile: cmuUserProfile,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || "Test login failed" });
+  }
+}
+

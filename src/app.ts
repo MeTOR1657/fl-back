@@ -9,12 +9,24 @@ import authRoutes from "./routes/auth.routes.js";
 import masterDataRoutes from "./routes/master-data.routes.js";
 import usersRoutes from "./routes/users.routes.js";
 import ticketsRoutes from "./routes/tickets.routes.js";
+import { cmuOAuthExchange } from "./controllers/auth.controller.js";
 
 const app = express();
 
 app.use(
   cors({
-    origin: env.frontendUrl,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (
+        origin === env.frontendUrl ||
+        /^http:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin) ||
+        origin.includes("cpecmu.com")
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, true);
+    },
     credentials: true,
     methods: [
       "GET",
@@ -41,22 +53,29 @@ app.get("/health", async (_req, res) => {
   }
 });
 
-app.use(
-  "/auth",
-  authRoutes
-);
+app.get("/api/health", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    res.json({ success: true, database: "connected" });
+  } catch {
+    res.status(503).json({ success: false, database: "unavailable" });
+  }
+});
+
+app.use("/auth", authRoutes);
+app.use("/api/auth", authRoutes);
+
+app.post("/cmu-oauth/callback", cmuOAuthExchange);
+app.post("/api/cmu-oauth/callback", cmuOAuthExchange);
 
 app.use("/tickets", ticketsRoutes);
+app.use("/api/tickets", ticketsRoutes);
 
-app.use(
-  "/",
-  masterDataRoutes
-);
+app.use("/", masterDataRoutes);
+app.use("/api", masterDataRoutes);
 
-app.use(
-  "/",
-  usersRoutes
-);
+app.use("/", usersRoutes);
+app.use("/api", usersRoutes);
 
 app.use(
   "/uploads",

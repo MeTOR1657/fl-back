@@ -28,4 +28,11 @@ export const env = {
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
   googleRedirectUri:
     process.env.GOOGLE_REDIRECT_URI ?? "http://localhost:3001/auth/google/callback",
+
+  cmuClientId:
+    process.env.CMU_OAUTH_CLIENT_ID || "MWM9PxVFyADkwn6pTSxbKlVbw4Fq7me2xzOGLqW4",
+  cmuClientSecret:
+    process.env.CMU_OAUTH_CLIENT_SECRET || "hmYddTEV2GJr5MVXl2UaBIdjxGGpUPxJj86GFzUKgB2YH2Kdimn1vyxFF3UGWkX7HX6GQb9PTBV8FVE8ig7VFxZuWcTZwz8745REIqvaY8OH2tZmQEHhOECfOfx12DsQ",
+  cmuRedirectUri:
+    process.env.CMU_OAUTH_REDIRECT_URI || "http://localhost:5173/api/auth/callback",
 };

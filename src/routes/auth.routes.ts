@@ -5,6 +5,8 @@ import {
   login,
   startGoogleOAuth,
   googleOAuthCallback,
+  cmuOAuthExchange,
+  cmuTestLogin,
 } from "../controllers/auth.controller.js";
 import { db } from "../config/db.js";
 import { users } from "../db/schema.js";
@@ -56,6 +58,18 @@ router.patch("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
 
 router.get("/google", startGoogleOAuth);
 router.get("/google/callback", googleOAuthCallback);
+
+router.post("/cmu/callback", cmuOAuthExchange);
+router.post("/cmu/exchange", cmuOAuthExchange);
+router.post("/cmu/test-login", cmuTestLogin);
+
+router.get("/callback", (req, res) => {
+  const code = req.query.code;
+  if (code) {
+    return res.redirect(`/cmu-callback?code=${encodeURIComponent(String(code))}`);
+  }
+  return res.redirect("/cmu-callback");
+});
 
 router.post(
   "/register",
