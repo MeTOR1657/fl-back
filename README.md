@@ -4,7 +4,7 @@ Express/TypeScript API for CampusFix. PostgreSQL access, JWT authentication, Goo
 
 ## Local development (PowerShell)
 
-Keep `pf-front`, `pf-backend`, `pf-db`, and `pf-deploy` as sibling folders. Configure `.env` from `.env.example`; use the same `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`, and `POSTGRES_DB` as `pf-db/.env`. The local `DATABASE_URL` uses `localhost:5432`; `PORT=3001`; frontend origin is `http://localhost:5173`.
+Keep `fl-front`, `pf-backend`, `pf-db`, and `pf-deploy` as sibling folders. Configure `.env` from `.env.example`; use the same `POSTGRES_APP_USER`, `POSTGRES_APP_PASSWORD`, and `POSTGRES_DB` as `pf-db/.env`. The local `DATABASE_URL` uses `localhost:5432`; `PORT=3001`; frontend origin is `http://localhost:5173`.
 
 Start the database first from `pf-db` with `docker compose up -d`. Then run:
 
